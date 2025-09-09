@@ -1,5 +1,6 @@
 {
   "expo": {
+    "jsEngine": "jsc",
     "name": "posysapp",
     "slug": "posysapp",
     "version": "1.0.0",
