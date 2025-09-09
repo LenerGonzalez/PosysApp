@@ -41,7 +41,7 @@ export default function TabLayout() {
         options={{
           title: "Inventario",
           tabBarIcon: ({ color }) => (
-            <IconSymbol size={28} name="house.fill" color={color} />
+            <IconSymbol size={28} name="book.circle.fill" color={color} />
           ),
         }}
       />

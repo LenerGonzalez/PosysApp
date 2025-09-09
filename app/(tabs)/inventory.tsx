@@ -175,29 +175,33 @@ export default function InventarioScreen() {
     [products, productId]
   );
 
+  //actualiza precio al cambiar de producto
   useEffect(() => {
     if (!selectedProduct) {
       setProductName("");
       setUnit("Lb");
+      setSalePrice(0);
+      setSaleStr("");
       return;
     }
     setProductName(selectedProduct.name);
     setUnit(selectedProduct.measurement || "Lb");
-    if (!saleStr) setSaleStr(String(selectedProduct.price ?? ""));
-  }, [selectedProduct]); // no toco tus textos/inputs
+    setSalePrice(Number(selectedProduct.price || 0));
+    setSaleStr(String(selectedProduct.price ?? ""));
+  }, [selectedProduct]);
 
   const totals = useMemo(() => {
     const qty = batches.reduce((a, b) => a + (b.quantity || 0), 0);
     const rem = batches.reduce((a, b) => a + (b.remaining || 0), 0);
-     const totalFacturado = batches.reduce(
-       (a, b) => a + (b.invoiceTotal || 0),
-       0
-     );
-     const totalEsperado = batches.reduce(
-       (a, b) => a + (b.expectedTotal || 0),
-       0
-     );
-     return { qty, rem, totalFacturado, totalEsperado };
+    const totalFacturado = batches.reduce(
+      (a, b) => a + (b.invoiceTotal || 0),
+      0
+    );
+    const totalEsperado = batches.reduce(
+      (a, b) => a + (b.expectedTotal || 0),
+      0
+    );
+    return { qty, rem, totalFacturado, totalEsperado };
   }, [batches]);
 
   async function handleCreate() {
@@ -294,7 +298,7 @@ export default function InventarioScreen() {
         <Text style={{ fontSize: 18, color: "#AB274F", fontWeight: "bold" }}>
           - Restantes: {show2(totals.rem)}
         </Text>
-        </View>
+      </View>
       <View style={s.cardTotals}>
         <Text style={{ fontSize: 20, fontWeight: "bold" }}>
           Dinero Total (C$)
@@ -563,7 +567,7 @@ const s = StyleSheet.create({
     bottom: 100,
     width: 56,
     height: 56,
-    backgroundColor: "gray",
+    backgroundColor: "#007FFF",
     borderRadius: 28,
     alignItems: "center",
     justifyContent: "center",
@@ -572,7 +576,7 @@ const s = StyleSheet.create({
     shadowRadius: 4,
     elevation: 4,
   },
-  fabPlus: { color: "white", fontSize: 28 },
+  fabPlus: { color: "white", fontSize: 35 },
 
   // Sheet
   backdrop: {
