@@ -11,6 +11,7 @@ import {
 } from "firebase/firestore";
 import React, { useEffect, useMemo, useState } from "react";
 import { Alert, Button, StyleSheet, Text, TextInput, View } from "react-native";
+import allocateFIFOAndUpdateBatches from "../../services/allocateFIFO";
 import { db } from "../../services/firebase";
 import { parseLocaleFloat, show2, to2 } from "../../utils/number";
 
@@ -99,6 +100,15 @@ export default function VentaScreen() {
         return;
       }
 
+      // 1) Asignar FIFO y descontar de lotes
+      const { allocations, avgUnitCost, cogsAmount } =
+        await allocateFIFOAndUpdateBatches(
+          db,
+          selected?.productName || "",
+          qty,
+          false
+        );
+
       await addDoc(collection(db, "salesV2"), {
         productId: selectedProductId,
         productName: selected?.productName,
@@ -112,6 +122,9 @@ export default function VentaScreen() {
         userEmail: "(vendedor RN)",
         vendor: "vendedor",
         status: "FLOTANTE",
+        allocations, // 👈 opcional: para saber de qué lotes salió
+        avgUnitCost, // 👈 opcional: costo promedio
+        cogsAmount, // 👈 opcional: costo total
       });
 
       setMsg("✅ Venta registrada");
@@ -128,11 +141,10 @@ export default function VentaScreen() {
     <View style={s.wrap}>
       <Text style={s.h1}>Registrar venta</Text>
       <Text style={s.label}>Producto | Precio</Text>
-      <View style={s.selectWrap}>
+      <View style={s.pickerWrap}>
         <Picker
           selectedValue={selectedProductId}
           onValueChange={(val) => setSelectedProductId(val)}
-          style={s.select}
         >
           <Picker.Item label="Selecciona un producto..." value="" />
           {products.map((p) => (
@@ -197,11 +209,12 @@ const s = StyleSheet.create({
     fontSize: 16,
   },
   pickerWrap: {
+    height: 70,
+    justifyContent: "center",
     borderWidth: 1,
-    borderColor: "#D1D5DB",
-    borderRadius: 20,
-    overflow: "hidden", // da bordes redondeados en iOS
-    backgroundColor: "#fff", // mantiene look uniforme
+    borderColor: "#d1d5db",
+    borderRadius: 8,
+    overflow: "hidden",
   },
   selectWrap: {
     borderWidth: 1,
@@ -210,11 +223,11 @@ const s = StyleSheet.create({
     marginBottom: 8,
     overflow: "hidden", // 🔑 para que se vea redondeado
   },
-  select: {
-    height: 200, // 🔑 más compacto, como input
-    fontSize: 16,
-    color: "black", // texto oscuro
-  },
+  // select: {
+  //   height: 200, // 🔑 más compacto, como input
+  //   fontSize: 16,
+  //   color: "black", // texto oscuro
+  // },
 
   readonly: { backgroundColor: "#F3F4F6" },
   msg: { marginTop: 8, fontSize: 13 },

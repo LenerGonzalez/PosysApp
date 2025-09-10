@@ -13,13 +13,18 @@ import {
   Alert,
   Button,
   FlatList,
+  Keyboard,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
   TextInput,
+  TouchableWithoutFeedback,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { db } from "../../services/firebase";
 import { newBatch } from "../../services/inventory";
 import { show2 } from "../../utils/number";
@@ -355,151 +360,175 @@ export default function InventarioScreen() {
         animationType="slide"
         visible={open}
         onRequestClose={closeSheet}
+        presentationStyle="overFullScreen"
+        statusBarTranslucent
       >
-        <View style={s.backdrop}>
-          <View style={s.sheet}>
-            <View style={s.sheetHeader}>
-              <Text style={s.sheetTitle}>Nuevo lote</Text>
-              <Pressable onPress={closeSheet} hitSlop={10}>
-                <Text style={s.close}>Cerrar</Text>
-              </Pressable>
-            </View>
+        <SafeAreaView edges={["bottom"]} style={s.modalRoot}>
+          {/* Overlay arriba del sheet: tap => cierra teclado */}
+          <TouchableWithoutFeedback
+            onPress={Keyboard.dismiss}
+            accessible={false}
+          >
+            <View style={s.backdropTouch} />
+          </TouchableWithoutFeedback>
 
-            {/* Picker de productos (igual) */}
-            <View style={s.selectWrap}>
-              <Picker
-                selectedValue={productId}
-                onValueChange={(val) => setProductId(val)}
-                style={s.select}
-              >
-                <Picker.Item
-                  label="Selecciona un producto…"
-                  value=""
-                  color="#9CA3AF"
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            keyboardVerticalOffset={Platform.OS === "ios" ? 80 : 0}
+            style={s.kavSheet}
+          >
+            {/* También dentro del sheet, por si tocas en zonas vacías */}
+            <TouchableWithoutFeedback
+              onPress={Keyboard.dismiss}
+              accessible={false}
+            >
+              <View style={s.sheet}>
+                <View style={s.sheetHeader}>
+                  <Text style={s.sheetTitle}>Nuevo lote</Text>
+                  <Pressable onPress={closeSheet} hitSlop={10}>
+                    <Text style={s.close}>Cerrar</Text>
+                  </Pressable>
+                </View>
+
+                {/* Picker de productos (igual) */}
+                <View style={s.selectWrap}>
+                  <Picker
+                    selectedValue={productId}
+                    onValueChange={(val) => setProductId(val)}
+                    style={s.select}
+                  >
+                    <Picker.Item
+                      label="Selecciona un producto…"
+                      value=""
+                      color="#9CA3AF"
+                    />
+                    {products.map((p) => (
+                      <Picker.Item
+                        key={p.id}
+                        value={p.id}
+                        label={`${p.name} — Precio: ${money(p.price)}`}
+                      />
+                    ))}
+                  </Picker>
+                </View>
+
+                {/* Nombre y unidad: derivados del producto (no editables) */}
+                <Text style={s.label}>Nombre</Text>
+                <TextInput
+                  style={[s.input, s.readonly]}
+                  value={productName}
+                  editable={false}
+                  placeholder="(selecciona un producto)"
                 />
-                {products.map((p) => (
-                  <Picker.Item
-                    key={p.id}
-                    value={p.id}
-                    label={`${p.name} — Precio: ${money(p.price)}`}
-                  />
-                ))}
-              </Picker>
-            </View>
 
-            {/* Nombre y unidad: derivados del producto (no editables) */}
-            <Text style={s.label}>Nombre</Text>
-            <TextInput
-              style={[s.input, s.readonly]}
-              value={productName}
-              editable={false}
-              placeholder="(selecciona un producto)"
-            />
+                <Text style={s.label}>Unidad (lb/unidad)</Text>
+                <TextInput
+                  style={[s.input, s.readonly]}
+                  value={unit}
+                  editable={false}
+                  placeholder="lb"
+                />
 
-            <Text style={s.label}>Unidad (lb/unidad)</Text>
-            <TextInput
-              style={[s.input, s.readonly]}
-              value={unit}
-              editable={false}
-              placeholder="lb"
-            />
+                {/* ✅ CAMBIO 2: inputs con string + normalización en onBlur */}
+                <Text style={s.label}>Cantidad</Text>
+                <TextInput
+                  style={s.input}
+                  keyboardType={
+                    unit.toLowerCase() === "lb" ? "decimal-pad" : "number-pad"
+                  }
+                  placeholder={unit.toLowerCase() === "lb" ? "0.000" : "0"}
+                  value={qtyStr}
+                  onChangeText={(text) => {
+                    const t = text.replace(",", ".");
+                    const re =
+                      unit.toLowerCase() === "lb"
+                        ? /^\d*([.]\d{0,3})?$/
+                        : /^\d*$/;
+                    if (t === "" || re.test(t)) setQtyStr(t);
+                  }}
+                  onBlur={() => {
+                    const raw = qtyStr.trim() === "" ? "0" : qtyStr;
+                    const q = parseFloat(raw);
+                    if (!isNaN(q)) {
+                      const qSafe =
+                        unit.toLowerCase() === "lb"
+                          ? Number(q.toFixed(3))
+                          : Math.round(q);
+                      setQtyStr(
+                        unit.toLowerCase() === "lb"
+                          ? qSafe.toFixed(3)
+                          : String(qSafe)
+                      );
+                      setQuantity(qSafe);
+                    } else {
+                      setQtyStr("");
+                      setQuantity(0);
+                    }
+                  }}
+                />
 
-            {/* ✅ CAMBIO 2: inputs con string + normalización en onBlur */}
-            <Text style={s.label}>Cantidad</Text>
-            <TextInput
-              style={s.input}
-              keyboardType={
-                unit.toLowerCase() === "lb" ? "decimal-pad" : "number-pad"
-              }
-              placeholder={unit.toLowerCase() === "lb" ? "0.000" : "0"}
-              value={qtyStr}
-              onChangeText={(text) => {
-                const t = text.replace(",", ".");
-                const re =
-                  unit.toLowerCase() === "lb" ? /^\d*([.]\d{0,3})?$/ : /^\d*$/;
-                if (t === "" || re.test(t)) setQtyStr(t);
-              }}
-              onBlur={() => {
-                const raw = qtyStr.trim() === "" ? "0" : qtyStr;
-                const q = parseFloat(raw);
-                if (!isNaN(q)) {
-                  const qSafe =
-                    unit.toLowerCase() === "lb"
-                      ? Number(q.toFixed(3))
-                      : Math.round(q);
-                  setQtyStr(
-                    unit.toLowerCase() === "lb"
-                      ? qSafe.toFixed(3)
-                      : String(qSafe)
-                  );
-                  setQuantity(qSafe);
-                } else {
-                  setQtyStr("");
-                  setQuantity(0);
-                }
-              }}
-            />
+                <Text style={s.label}>Precio compra</Text>
+                <TextInput
+                  style={s.input}
+                  keyboardType="decimal-pad"
+                  placeholder="0.00"
+                  value={purchaseStr}
+                  onChangeText={(text) => {
+                    const t = text.replace(",", ".");
+                    const re = /^\d*([.]\d{0,2})?$/;
+                    if (t === "" || re.test(t)) setPurchaseStr(t);
+                  }}
+                  onBlur={() => {
+                    const p = parseFloat(purchaseStr || "0");
+                    if (!isNaN(p)) {
+                      const pSafe = Number(p.toFixed(2));
+                      setPurchaseStr(pSafe.toFixed(2));
+                      setPurchasePrice(pSafe);
+                    } else {
+                      setPurchaseStr("");
+                      setPurchasePrice(0);
+                    }
+                  }}
+                />
 
-            <Text style={s.label}>Precio compra</Text>
-            <TextInput
-              style={s.input}
-              keyboardType="decimal-pad"
-              placeholder="0.00"
-              value={purchaseStr}
-              onChangeText={(text) => {
-                const t = text.replace(",", ".");
-                const re = /^\d*([.]\d{0,2})?$/;
-                if (t === "" || re.test(t)) setPurchaseStr(t);
-              }}
-              onBlur={() => {
-                const p = parseFloat(purchaseStr || "0");
-                if (!isNaN(p)) {
-                  const pSafe = Number(p.toFixed(2));
-                  setPurchaseStr(pSafe.toFixed(2));
-                  setPurchasePrice(pSafe);
-                } else {
-                  setPurchaseStr("");
-                  setPurchasePrice(0);
-                }
-              }}
-            />
+                <Text style={s.label}>Precio venta</Text>
+                <TextInput
+                  style={s.input}
+                  keyboardType="decimal-pad"
+                  placeholder="0.00"
+                  value={saleStr}
+                  onChangeText={(text) => {
+                    const t = text.replace(",", ".");
+                    const re = /^\d*([.]\d{0,2})?$/;
+                    if (t === "" || re.test(t)) setSaleStr(t);
+                  }}
+                  onBlur={() => {
+                    const s = parseFloat(saleStr || "0");
+                    if (!isNaN(s)) {
+                      const sSafe = Number(s.toFixed(2));
+                      setSaleStr(sSafe.toFixed(2));
+                      setSalePrice(sSafe);
+                    } else {
+                      setSaleStr("");
+                      setSalePrice(0);
+                    }
+                  }}
+                />
 
-            <Text style={s.label}>Precio venta</Text>
-            <TextInput
-              style={s.input}
-              keyboardType="decimal-pad"
-              placeholder="0.00"
-              value={saleStr}
-              onChangeText={(text) => {
-                const t = text.replace(",", ".");
-                const re = /^\d*([.]\d{0,2})?$/;
-                if (t === "" || re.test(t)) setSaleStr(t);
-              }}
-              onBlur={() => {
-                const s = parseFloat(saleStr || "0");
-                if (!isNaN(s)) {
-                  const sSafe = Number(s.toFixed(2));
-                  setSaleStr(sSafe.toFixed(2));
-                  setSalePrice(sSafe);
-                } else {
-                  setSaleStr("");
-                  setSalePrice(0);
-                }
-              }}
-            />
+                <Text style={s.label}>Fecha (yyyy-MM-dd)</Text>
+                <TextInput
+                  style={s.input}
+                  value={dateStr}
+                  onChangeText={setDateStr}
+                />
 
-            <Text style={s.label}>Fecha (yyyy-MM-dd)</Text>
-            <TextInput
-              style={s.input}
-              value={dateStr}
-              onChangeText={setDateStr}
-            />
-
-            <View style={{ marginTop: 12 }}>
-              <Button title="Guardar lote" onPress={handleCreate} />
-            </View>
-          </View>
-        </View>
+                <View style={s.btn}>
+                  <Button title="Guardar lote" onPress={handleCreate} />
+                </View>
+              </View>
+            </TouchableWithoutFeedback>
+          </KeyboardAvoidingView>
+        </SafeAreaView>
       </Modal>
     </View>
   );
@@ -540,18 +569,23 @@ const s = StyleSheet.create({
     backgroundColor: "#F5F5F5",
   },
   selectWrap: {
+    height: 75,
+    justifyContent: "center",
     borderWidth: 1,
-    borderColor: "#D1D5DB",
-    borderRadius: 20,
-    marginBottom: 8,
+    borderColor: "#d1d5db",
+    borderRadius: 8,
     overflow: "hidden",
-    backgroundColor: "#fff",
   },
-  select: {
-    height: 150,
-    fontSize: 16,
-    color: "#111827",
+  btn: {
+    borderRadius: 20,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
   },
+  // select: {
+  //   height: 150,
+  //   fontSize: 16,
+  //   color: "#111827",
+  // },
   cardTitle: {
     fontWeight: "700",
     marginBottom: 4,
@@ -590,7 +624,7 @@ const s = StyleSheet.create({
     borderTopRightRadius: 20,
     padding: 20,
     gap: 8,
-    height: "86%",
+    //height: "86%",
   },
   sheetHeader: {
     flexDirection: "row",
@@ -599,4 +633,15 @@ const s = StyleSheet.create({
   },
   sheetTitle: { fontSize: 18, fontWeight: "700", flex: 1 },
   close: { color: "#2563EB", fontWeight: "600" },
+  modalRoot: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.25)",
+  },
+  backdropTouch: {
+    flex: 1, // área superior clickeable para cerrar el teclado
+  },
+  kavSheet: {
+    flex: 1,
+    justifyContent: "flex-end", // mantiene el sheet abajo
+  },
 });
